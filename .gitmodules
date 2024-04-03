@@ -1,0 +1,9 @@
+[submodule "detectron2_ema"]
+	path = detectron2_ema
+	url = https://github.com/xiaohu2015/detectron2_ema.git
+[submodule "detectron2_components"]
+	path = detectron2_components
+	url = git@gitlab.diagnocat.dev:research/detectron2_components.git
+[submodule "src/maskdino"]
+	path = src/maskdino
+	url = git@gitlab.diagnocat.dev:research/maskdino.git
