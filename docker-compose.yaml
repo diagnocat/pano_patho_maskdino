@@ -1,0 +1,33 @@
+version: "3"
+
+services:
+  pano-localizer:
+    container_name: $USER-pano-patho
+    build: .
+    shm_size: 64g
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    ports:
+      - $JUPYTER_PORT:$JUPYTER_PORT
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${GPUS:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - WANDB_API_KEY=$WANDB_API_KEY
+      - LAKEFS_ACCESS_KEY_ID=$LAKEFS_ACCESS_KEY_ID
+      - LAKEFS_SECRET_ACCESS_KEY=$LAKEFS_SECRET_ACCESS_KEY
+    volumes:
+      - .:/workspace/pano_patho_maskdino
+      - /dvc-cache:/dvc-cache
+      - $HOME/.netrc:/root/.netrc:ro # wandb
+      - $HOME/.diagnocat:/root/.diagnocat
+      - $HOME/.jupyter:/root/.jupyter
+      - $HOME/.cache:/root/.cache
+      - /share/dc3:/share/dc3
+    command: jupyter lab --allow-root --no-browser --ip=0.0.0.0 --port=$JUPYTER_PORT

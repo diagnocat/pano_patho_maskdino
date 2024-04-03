@@ -1,0 +1,21 @@
+# semseg train logs
+*train.log
+# # # Byte-compiled / optimized / DLL files
+**/__pycache__
+.vscode/
+logs/
+*.log
+**wandb/
+*.ipynb_checkpoints
+
+src/maskdino/modeling/pixel_decoder/ops/build/
+src/maskdino/modeling/pixel_decoder/ops/dist/
+*.egg-info
+outputs/
+notebooks/
+*.ipynb
+data/processed
+data/raw
+data/raw_old
+pretrained_ckpts/
+data/lakefs

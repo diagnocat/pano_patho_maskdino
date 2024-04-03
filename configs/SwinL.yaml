@@ -1,0 +1,51 @@
+_BASE_: "../src/maskdino/configs/maskdino_SwinL.yaml"
+DATASETS:
+  TRAIN:
+    - coco-train
+  TEST:
+    - coco-test
+
+INPUT:
+  TAG_NAME_TO_NUM_CLASSES:
+    is_buildup: 2
+    post_material: 2
+    involvement: 6
+    is_surface_distal: 2
+    is_surface_occlusal: 2
+    is_surface_lingual: 2
+    is_surface_mesial: 2
+    is_surface_vestibular: 2
+    is_surface_incisal: 2
+    is_surface_buccal: 2
+    is_surface_not_defined: 2
+
+  MIXUP_PROBA: 0.0
+
+  MIN_SIZE_TRAIN: [512, 576, 640, 704, 768]
+  MAX_SIZE_TRAIN: 1024
+  MIN_SIZE_TRAIN_SAMPLING: "choice"
+  MIN_SIZE_TEST: 768
+  MAX_SIZE_TEST: 1024
+
+MODEL:
+  SEM_SEG_HEAD:
+    NUM_CLASSES: 27
+  MaskDINO:
+    INITIALIZE_BOX_TYPE: "bitmask"
+    NUM_OBJECT_QUERIES: 300
+  WEIGHTS: /share/dc3/mamat/ioxray_localizer_maskdino/pretrained_ckpts/converted_maskdino_swinl_50ep_300q_hid2048_3sd1_instance_maskenhanced_mask52.3ap_box59.0ap.pth
+
+MODEL_EMA:
+  ENABLED: True
+
+SOLVER:
+  BASE_LR: 0.0001
+  STEPS:
+    - 50000
+    - 57500
+  MAX_ITER: 60000
+  IMS_PER_BATCH: 4
+
+TEST:
+  DETECTIONS_PER_IMAGE: 100
+  EVAL_PERIOD: 5000

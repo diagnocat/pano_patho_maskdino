@@ -1,0 +1,10 @@
+[cache]
+    dir = /dvc-cache
+    type = symlink
+    protected = true
+    shared = group
+[core]
+    remote = diagnocat-s3
+    hardlink_lock = true
+['remote "diagnocat-s3"']
+    url = s3://diagnocat-dvc-cache/dvc

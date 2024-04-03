@@ -1,0 +1,4 @@
+notebooks/
+outputs/
+pretrained_ckpts/
+wandb/

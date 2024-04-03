@@ -1,0 +1,11 @@
+credentials:
+  access_key_id: ${LAKEFS_ACCESS_KEY_ID}
+  secret_access_key: ${LAKEFS_SECRET_ACCESS_KEY}
+metastore:
+  glue:
+    catalog_id: ""
+  hive:
+    db_location_uri: file:/user/hive/warehouse/
+    uri: ""
+server:
+  endpoint_url: https://lakefs.diagnocat.dev/
