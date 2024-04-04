@@ -5,6 +5,11 @@ from typing import Literal, TypeAlias, TypedDict
 
 import numpy as np
 
+BADLY_ANNOTATED_HASHES = {
+    "qZoAKTp7CrBcOKWObntxNOY4Zspsj34Ir0x+A9me9AE=",
+    "wApBiU8Q+cithWL1Dlf7g+KowUQkTGbMywWqeSuWWvc=",
+    "1vodpNgI18zdj1WwLxmLBEPVmjTQ/H9yjipVJCs5Z5k=",
+}
 
 class Example(TypedDict):
     annotated_classes: list[str]

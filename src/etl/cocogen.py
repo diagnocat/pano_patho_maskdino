@@ -12,8 +12,9 @@ from joblib import Parallel, delayed
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
-from ..defs import INDEX_HASHES_PATH, RAW_DATA_PATH
+from ..defs import CROPS_PATH, INDEX_HASHES_PATH, RAW_DATA_PATH
 from .annotation import (
+    BADLY_ANNOTATED_HASHES,
     CONDITION_CLASS_TO_LABEL,
     CONDITION_LABEL_TO_CLASS,
     CONDITIONS_RU2EN,
@@ -28,10 +29,9 @@ from .annotation import (
 )
 from .tags import resolve_tags
 from .utils import NpEncoder, get_examples_lakefs, read_image
-from .working_field import find_working_field
 
 
-def prepare_coco_dataset(output_path: str | Path) -> None:
+def prepare_coco_dataset(output_path: str | Path, crop_context_px: int = 20) -> None:
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -42,10 +42,14 @@ def prepare_coco_dataset(output_path: str | Path) -> None:
 
     examples = get_examples_lakefs(RAW_DATA_PATH)
 
-    annotated_hashes = annotated_data_hashes["annotated"]["hashes"]
-    val_hashes = annotated_data_hashes["val"]["hashes"]
-    test_hashes = annotated_data_hashes["test"]["hashes"]
-    test_pipelines_hashes = annotated_data_hashes["pipelines_test_cases"]["hashes"]
+    annotated_hashes = (
+        annotated_data_hashes["annotated"]["hashes"] - BADLY_ANNOTATED_HASHES
+    )
+    val_hashes = annotated_data_hashes["val"]["hashes"] - BADLY_ANNOTATED_HASHES
+    test_hashes = annotated_data_hashes["test"]["hashes"] - BADLY_ANNOTATED_HASHES
+    test_pipelines_hashes = (
+        annotated_data_hashes["pipelines_test_cases"]["hashes"] - BADLY_ANNOTATED_HASHES
+    )
     train_hashes = annotated_hashes - val_hashes - test_hashes - test_pipelines_hashes
 
     train_examples = [ex for ex in examples if ex["image_hash"] in train_hashes]
@@ -90,6 +94,7 @@ def prepare_coco_dataset(output_path: str | Path) -> None:
         annotation_file_output_path=output_path
         / "annotations"
         / "instances_train.json",
+        crop_context_px=crop_context_px,
     )
 
     build_coco_dataset(
@@ -99,7 +104,7 @@ def prepare_coco_dataset(output_path: str | Path) -> None:
         image_output_path=output_path / "val",
         annotation_file_output_path=output_path / "annotations" / "instances_val.json",
         start_image_id=100000,
-        short_edge_length=None,
+        crop_context_px=crop_context_px,
     )
 
     build_coco_dataset(
@@ -109,6 +114,19 @@ def prepare_coco_dataset(output_path: str | Path) -> None:
         image_output_path=output_path / "test",
         annotation_file_output_path=output_path / "annotations" / "instances_test.json",
         start_image_id=200000,
+        crop_context_px=crop_context_px,
+    )
+
+    build_coco_dataset(
+        test_examples,
+        categories=categories,
+        image_input_path=RAW_DATA_PATH / "data",
+        image_output_path=output_path / "test_orig",
+        annotation_file_output_path=output_path
+        / "annotations"
+        / "instances_test_orig.json",
+        start_image_id=300000,
+        crop_context_px=None,
         short_edge_length=None,
     )
 
@@ -120,7 +138,20 @@ def prepare_coco_dataset(output_path: str | Path) -> None:
         annotation_file_output_path=output_path
         / "annotations"
         / "instances_test_pipelines.json",
-        start_image_id=300000,
+        start_image_id=400000,
+        crop_context_px=crop_context_px,
+    )
+
+    build_coco_dataset(
+        test_pipelines_examples,
+        categories=categories,
+        image_input_path=RAW_DATA_PATH / "data",
+        image_output_path=output_path / "test_pipelines_orig",
+        annotation_file_output_path=output_path
+        / "annotations"
+        / "instances_test_pipelines_orig.json",
+        start_image_id=500000,
+        crop_context_px=None,
         short_edge_length=None,
     )
 
@@ -133,7 +164,7 @@ def build_coco_dataset(
     annotation_file_output_path: Path,
     short_edge_length: int | None = 768,
     long_edge_max_length: int = 1333,
-    crop_working_field: bool = True,
+    crop_context_px: int | None = None,
     start_image_id: int = 1,
     n_jobs: int = 16,
 ) -> None:
@@ -145,6 +176,21 @@ def build_coco_dataset(
     if short_edge_length is not None:
         loguru.logger.info(f"Resizing image's shortest side to {short_edge_length}")
 
+    if crop_context_px is not None:
+        assert CROPS_PATH.exists()
+        with open(CROPS_PATH, "r") as f:
+            crops = json.load(f)
+        for image_hash, crop in crops.items():
+            ymin, xmin, ymax, xmax = crop
+            crops[image_hash] = (
+                ymin - crop_context_px,
+                xmin - crop_context_px,
+                ymax + crop_context_px,
+                xmax + crop_context_px,
+            )
+    else:
+        crops = {}
+
     out = Parallel(n_jobs=n_jobs)(
         delayed(process_example)(
             example=example,
@@ -152,7 +198,7 @@ def build_coco_dataset(
             image_output_path=image_output_path,
             short_edge_length=short_edge_length,
             long_edge_max_length=long_edge_max_length,
-            crop_working_field=crop_working_field,
+            crop=crops.get(example["image_hash"]),
         )
         for example in tqdm(examples)
     )
@@ -237,7 +283,7 @@ def process_example(
     short_edge_length: int | None = 768,
     long_edge_max_length: int = 1333,
     ignore_label: int = -100,
-    crop_working_field: bool = True,
+    crop: tuple[int, int, int, int] | None = None,
 ) -> tuple[np.ndarray | None, dict[str, Any] | None]:
     img_out_path = image_output_path / example["image_path"]
     img_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -259,8 +305,12 @@ def process_example(
         ratio = image.max() / 255
         image = (image / ratio).astype(np.uint8)
 
-    if crop_working_field:
-        ymin_wf, ymax_wf, xmin_wf, xmax_wf = find_working_field(image)
+    if crop is not None:
+        ymin_wf, xmin_wf, ymax_wf, xmax_wf = crop
+        ymin_wf = max(0, ymin_wf)
+        xmin_wf = max(0, xmin_wf)
+        ymax_wf = min(image.shape[0], ymax_wf)
+        xmax_wf = min(image.shape[1], xmax_wf)
         image = image[ymin_wf:ymax_wf, xmin_wf:xmax_wf]
 
     if short_edge_length is not None:
@@ -298,8 +348,11 @@ def process_example(
             assert isinstance(object_["points"], list)
 
             points = np.array(object_["points"])
-            if crop_working_field:
+            if crop is not None:
                 points -= np.array([xmin_wf, ymin_wf])
+                if (points < 0).all():
+                    continue
+                points = points.clip(min=0)
             object_["points"] = transform.apply_coords(points).tolist()
 
             if object_["shape"] in ("polygon", "points"):
