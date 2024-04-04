@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  pano-localizer:
+  pano-patho:
     container_name: $USER-pano-patho
     build: .
     shm_size: 64g
