@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from detectron2.structures import Boxes, Instances
 
-from ...etl.working_field import find_working_field
 from .nms import apply_instances_nms
 from .postprocess import postprocess_instances
 
@@ -53,15 +52,15 @@ class InferenceDriver:
         original_image: np.ndarray,
         rescale_scores_inplace: bool = True,
         filter_by_threshold: bool = True,
-        crop_working_field: bool = True,
+        crop: tuple[int, int, int, int] | None = None,
         resize_outputs_to_original_shape: bool = True,
     ) -> Instances:
         assert (
             original_image.ndim == 3 and original_image.shape[2] == 3
         ), original_image.shape
 
-        if crop_working_field:
-            ymin_wf, ymax_wf, xmin_wf, xmax_wf = find_working_field(original_image)
+        if crop is not None:
+            ymin_wf, xmin_wf, ymax_wf, xmax_wf = crop
             working_image = original_image[ymin_wf:ymax_wf, xmin_wf:xmax_wf]
         else:
             working_image = original_image
@@ -103,7 +102,7 @@ class InferenceDriver:
         if self.nms_threshold is not None:
             instances = apply_instances_nms(instances, self.nms_threshold)
 
-        if crop_working_field:
+        if crop is not None:
             original_height, original_width = original_image.shape[:2]
             if resize_outputs_to_original_shape:
                 output_height, output_width = original_height, original_width

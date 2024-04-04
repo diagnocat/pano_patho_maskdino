@@ -415,26 +415,27 @@ def build_transforms(cfg, is_train: bool) -> list[T.Augmentation]:
     if is_train:
         transforms.extend(
             [
+                T.RandomFlip(prob=0.5, horizontal=True, vertical=False),
                 AlbuImageOnlyAugmentation(
                     albu_transform=A.RandomBrightnessContrast(
-                        brightness_limit=0.3, contrast_limit=0.3
+                        brightness_limit=0.2, contrast_limit=0.2
                     ),
                     prob=1.0,
                 ),
-                AlbuImageOnlyAugmentation(albu_transform=A.Blur(), prob=0.2),
+                AlbuImageOnlyAugmentation(albu_transform=A.Blur(), prob=0.05),
                 AlbuImageOnlyAugmentation(
-                    albu_transform=A.Downscale(scale_min=0.5, scale_max=0.75), prob=0.2
+                    albu_transform=A.Downscale(scale_min=0.5, scale_max=0.75), prob=0.05
                 ),
                 AlbuImageOnlyAugmentation(
                     albu_transform=A.MultiplicativeNoise(
                         multiplier=[0.9, 1.1], elementwise=True
                     ),
-                    prob=0.1,
+                    prob=0.05,
                 ),
                 AlbuImageOnlyAugmentation(
-                    albu_transform=A.ImageCompression(quality_lower=50), prob=0.1
+                    albu_transform=A.ImageCompression(quality_lower=50), prob=0.05
                 ),
-                AlbuImageOnlyAugmentation(albu_transform=A.Solarize(), prob=0.1),
+                AlbuImageOnlyAugmentation(albu_transform=A.Solarize(), prob=0.05),
             ]
         )
 

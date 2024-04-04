@@ -69,7 +69,7 @@ def main(args):
 
         # init wandb
         if not os.getenv("DISABLE_WANDB", False):
-            project_name = "maskdino_pano_num"
+            project_name = "maskdino_pano_patho"
             run_name = str(cfg.OUTPUT_DIR).split("/")[-1]
             wandb.init(
                 project=project_name,
