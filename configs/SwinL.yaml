@@ -25,7 +25,7 @@ INPUT:
   MIXUP_PROBA: 0.0
 
   MIN_SIZE_TRAIN: [512, 576, 640, 704, 768]
-  MAX_SIZE_TRAIN: 512
+  MAX_SIZE_TRAIN: 1024
   MIN_SIZE_TRAIN_SAMPLING: "choice"
   MIN_SIZE_TEST: 768
   MAX_SIZE_TEST: 1024
@@ -35,7 +35,7 @@ MODEL:
     NUM_CLASSES: 26
   MaskDINO:
     INITIALIZE_BOX_TYPE: "bitmask"
-    NUM_OBJECT_QUERIES: 900
+    NUM_OBJECT_QUERIES: 300
     DN_NUM: 150
   WEIGHTS: /share/dc3/mamat/ioxray_localizer_maskdino/pretrained_ckpts/converted_maskdino_swinl_50ep_300q_hid2048_3sd1_instance_maskenhanced_mask52.3ap_box59.0ap.pth
 
