@@ -89,7 +89,7 @@ def convert_pipelines_preds_to_image_annotation(
     image_id: int,
     height: int,
     width: int,
-    code_to_resarch_condition: dict[str, str],
+    code_to_resarch_condition: dict[int, str],
 ) -> ImageAnnotation:
     instance_annotations = []
     for patho in pathologies:

@@ -11,15 +11,7 @@ import numpy as np
 import pycocotools.mask as mask_util
 import torch
 from detectron2.data import MetadataCatalog
-from detectron2.structures import (
-    BitMasks,
-    Boxes,
-    BoxMode,
-    Instances,
-    Keypoints,
-    PolygonMasks,
-    polygons_to_bitmask,
-)
+from detectron2.structures import BitMasks, BoxMode, PolygonMasks, polygons_to_bitmask
 from detectron2.utils.file_io import PathManager
 from pycocotools import mask as coco_mask
 from pycocotools import mask as maskUtils
@@ -114,8 +106,10 @@ def load_coco_json(
         # use all tags
         tag_names = list(tags)
     meta_tags = {}
-    for tag_name, tag_label_to_class in tags.items():
-        if tag_name in tag_names:
+    for tag_name in tag_names:
+        if (tag_label_to_class := tags.get(tag_name)) is None:
+            logger.warning(f"Tag {tag_name} is not found!")
+        else:
             meta_tags[tag_name] = {
                 int(label): class_name
                 for label, class_name in tag_label_to_class.items()
