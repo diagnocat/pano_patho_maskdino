@@ -11,6 +11,7 @@ BADLY_ANNOTATED_HASHES = {
     "1vodpNgI18zdj1WwLxmLBEPVmjTQ/H9yjipVJCs5Z5k=",
 }
 
+
 class Example(TypedDict):
     annotated_classes: list[str]
     last_task_id: int
@@ -194,6 +195,8 @@ TAG_TO_LABEL_TO_CLASS = {
     "post_material": POST_MATERIAL_LABEL_TO_CLASS,
     "involvement": INVOLVEMENT_LABEL_TO_CLASS,
     "crown_destruction": CROWN_DESTRUCTION_LABEL_TO_CLASS,
+    "pbl_severity": PBL_SEVERITY_LABEL_TO_CLASS,
+    "pbl_type": PBL_TYPE_LABEL_TO_CLASS,
     **{
         f"is_surface_{surface}": label_to_class
         for surface, label_to_class in SURFACES_LABEL_TO_CLASS.items()

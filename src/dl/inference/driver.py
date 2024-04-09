@@ -84,9 +84,7 @@ class InferenceDriver:
         }
 
         if self.is_jit_scripted:
-            with torch.jit.optimized_execution(False), torch.autocast(
-                device_type="cuda"
-            ):
+            with torch.jit.optimized_execution(False):
                 instances_fields = self.model([inputs])[0]
         else:
             instances_fields = self.model([inputs])[0]

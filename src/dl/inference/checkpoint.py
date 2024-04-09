@@ -20,6 +20,7 @@ def prepare_inference_checkpoint(
     else:
         out = ckpt["model"]
     out.pop("criterion.empty_weight")
+    out = {k.replace("occlusal", "occlusial"): v for k, v in out.items()}
 
     out_checkpoint_path = out_path / f"inference_{checkpoint_path.name}"
     torch.save({"model": out}, out_checkpoint_path)

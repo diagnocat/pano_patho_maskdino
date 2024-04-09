@@ -46,6 +46,9 @@ def postprocess_tags(instances: Instances, ignore_label: int = -100) -> Instance
         "is_buildup": ["filling"],
         "post_material": ["post"],
         "involvement": ["caries", "secondary_caries", "filling"],
+        "pbl_severity": ["periodontal_bone_loss"],
+        "pbl_type": ["periodontal_bone_loss"],
+        "crown_destruction": ["caries", "secondary_caries", "filling"],
         **{
             f"is_surface_{surface}": ["caries", "secondary_caries", "filling"]
             for surface in SURFACES
