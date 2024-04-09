@@ -14,7 +14,7 @@ INPUT:
     crown_destruction: 2
     involvement: 6
     is_surface_distal: 2
-    is_surface_occlusal: 2
+    is_surface_occlusial: 2
     is_surface_lingual: 2
     is_surface_mesial: 2
     is_surface_vestibular: 2
@@ -24,11 +24,11 @@ INPUT:
 
   MIXUP_PROBA: 0.0
 
-  MIN_SIZE_TRAIN: [512, 576, 640, 704, 768]
-  MAX_SIZE_TRAIN: 1024
+  MIN_SIZE_TRAIN: [768, 832, 896, 960, 1024]
+  MAX_SIZE_TRAIN: 1824
   MIN_SIZE_TRAIN_SAMPLING: "choice"
-  MIN_SIZE_TEST: 768
-  MAX_SIZE_TEST: 1024
+  MIN_SIZE_TEST: 1024
+  MAX_SIZE_TEST: 1824
 
 MODEL:
   SEM_SEG_HEAD:
@@ -45,9 +45,9 @@ MODEL_EMA:
 SOLVER:
   BASE_LR: 0.0001
   STEPS:
-    - 30000
-    - 37500
-  MAX_ITER: 40000
+    - 35000
+    - 45000
+  MAX_ITER: 50000
   IMS_PER_BATCH: 4
 
 TEST:
