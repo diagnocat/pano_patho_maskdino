@@ -45,6 +45,13 @@ def register_available_datasets(
             tag_names=tag_names,
         )
         register_coco_instances_w_extra_keys(
+            f"{dataset_name}-test-pipelines",
+            dataset_path / "annotations/instances_test_pipelines.json",
+            dataset_path / "test_pipelines",
+            extra_annotation_keys=["is_mask_annotated"],
+            tag_names=tag_names,
+        )
+        register_coco_instances_w_extra_keys(
             f"{dataset_name}-test-pipelines-orig",
             dataset_path / "annotations/instances_test_pipelines_orig.json",
             dataset_path / "test_pipelines_orig",
