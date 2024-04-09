@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 
 import loguru
@@ -16,7 +17,7 @@ from src.maskdino.src.config.inference import prepare_inference_cfg
 from src.maskdino.src.config.load import load_config
 
 
-def main(exp_name: str, n_test_runs: int = 10) -> None:
+def main(exp_name: str, nms_thresh: float = 0.8, n_test_runs: int = 10) -> None:
     exp_path = ROOT / "outputs" / exp_name
 
     checkpoint_path = exp_path / "inference_model_final.pth"
@@ -28,6 +29,12 @@ def main(exp_name: str, n_test_runs: int = 10) -> None:
 
     model = build_model(cfg)
     model = model.eval()
+    thresholds_path = exp_path / "thresholds.json"
+    assert thresholds_path.exists()
+    with open(thresholds_path, "r") as f:
+        thresholds = json.load(f)
+    model.thresholds = thresholds
+    model.nms_thresh = nms_thresh
 
     checkpointer = DetectionCheckpointer(model)
     _ = checkpointer.load(str(checkpoint_path))
@@ -70,5 +77,6 @@ def main(exp_name: str, n_test_runs: int = 10) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp-name", type=str, required=True)
+    parser.add_argument("--nms-thresh", type=float, default=0.8)
     args = parser.parse_args()
-    main(args.exp_name)
+    main(args.exp_name, args.nms_thresh)

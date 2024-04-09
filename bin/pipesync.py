@@ -18,9 +18,9 @@ SyncTree: TypeAlias = Dict[os.PathLike, "SyncBranch"]
 
 SYNC_TREE: SyncTree = {
     DL_PATH: [
-        {"inference": ["driver.py", "postprocess.py"]},
+        {"inference": ["driver.py", "postprocess.py", "nms.py"]},
     ],
-    ETL_DPATH: ["annotation.py", "working_field.py"],
+    ETL_DPATH: ["annotation.py"],
 }  # type: ignore
 
 

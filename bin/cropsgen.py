@@ -1,8 +1,5 @@
 import json
 
-import cv2
-import loguru
-import pandas as pd
 import PIL.Image
 from pipelines.graphs_2d.pano.graph_spec import build_graph_pano
 from pipelines.graphs_2d.pano.types import DetectedToothPano
