@@ -7,6 +7,8 @@ import torch
 from detectron2.structures import BoxMode, Instances
 from detectron2.utils.visualizer import GenericMask, Visualizer
 
+from ..etl.annotation import BINARY_TAG_TO_POSITIVE_CLASS
+
 # fmt: off
 _COLORS = np.array(
     [
@@ -188,6 +190,8 @@ class CustomVisualizer(Visualizer):
             tags_to_viz = list(metadata_tags)
         for anno in annotations:
             label = self.metadata.thing_classes[anno["category_id"]]
+            if label == "periodontal_bone_loss":
+                label = "pbl"
 
             for tag_name, tag_label_to_class in metadata_tags.items():
                 if tag_name not in tags_to_viz:
@@ -195,7 +199,7 @@ class CustomVisualizer(Visualizer):
                 tag_label = anno[tag_name]
                 if tag_label != ignore_label:
                     tag_class = tag_label_to_class[tag_label]
-                    if not tag_class.startswith("Not "):
+                    if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, None):
                         label += f" {tag_class}"
             labels.append(label)
         return labels
@@ -231,7 +235,7 @@ class CustomVisualizer(Visualizer):
                     continue
                 tag_score = tag_predictions["scores"][i]
                 tag_class = metadata_tags[tag_name][tag_label]
-                if not tag_class.startswith("Not "):
+                if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, None):
                     label += f" {tag_class} {tag_score:.2f}"
             labels.append(label)
 

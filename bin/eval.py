@@ -23,9 +23,7 @@ from src.maskdino.src.config.load import load_config
 def main(
     exp_name: str,
     score_thresh: float | None = None,
-    dataset: Literal[
-        "train", "val", "test", "test-orig", "test-pipelines", "test-pipelines-orig"
-    ] = "test",
+    dataset: Literal["train", "val", "test", "test-pipelines"] = "test",
     is_jit_scripted: bool = False,
     iou_thresh: float = 0.2,
     nms_thresh: float | None = 0.8,
@@ -116,15 +114,15 @@ def main(
     for name, metrics_ in metrics_dict.items():
         out.update(
             {
-                f"{metric_name}/{name}": metric_value
+                f"{name}/{metric_name}": metric_value
                 for metric_name, metric_value in metrics_.items()
             }
         )
     df = pd.Series(out)
     for metric in ["IoU", "F1", "Recall", "Precision"]:
-        df[f"{metric}/mean"] = df[[i for i in df.index if i.startswith(metric)]].mean()
+        df[f"{metric}/mean"] = df[[i for i in df.index if i.endswith(metric)]].mean()
     df = df.round(3)
-    df.to_csv(eval_dir / f"metrics_{dataset}_{iou_thresh=}_{nms_thresh=}.csv")
+    df.to_csv(eval_dir / f"metrics_{iou_thresh=}_{nms_thresh=}_{mask_iou=}.csv")
 
     for metric, metric_value in df.items():
         loguru.logger.info(f"{metric}: {metric_value:.3f}")
@@ -134,7 +132,7 @@ def main(
         plot_confusion_matrix(
             conf_matrix=conf_matrix,
             class_names=class_names,
-            save_path=eval_dir / f"conf_matrix_{dataset}_{tag_name}.png",
+            save_path=eval_dir / f"conf_matrix_{tag_name}.png",
             annotate=True,
         )
 

@@ -2,19 +2,25 @@ import numpy as np
 import torch
 from detectron2.structures import Instances
 
-from ...etl.annotation import CONDITION_CLASS_TO_LABEL_PREDICTIONS, SURFACES
+from ...etl.annotation import (
+    BINARY_TAG_TO_POSITIVE_CLASS,
+    CONDITION_CLASS_TO_LABEL_PREDICTIONS,
+    TAG_TO_CLASS_TO_LABEL,
+    TAG_TO_CONDITIONS,
+)
 
 
 def postprocess_instances(
     instances: Instances,
-    probability_thresholds: dict[str, float],
+    condition_thresholds: dict[str, float],
+    tag_thresholds: dict[str, float] | None = None,
     rescale_scores_inplace: bool = True,
     filter_by_threshold: bool = True,
 ) -> Instances:
     instances.pred_boxes.clip(instances.image_size)
 
     instances_filtered = []
-    for condition, threshold in probability_thresholds.items():
+    for condition, threshold in condition_thresholds.items():
         condition_mask: torch.Tensor = (
             instances.pred_classes == CONDITION_CLASS_TO_LABEL_PREDICTIONS[condition]
         )
@@ -34,36 +40,55 @@ def postprocess_instances(
 
     instances = Instances.cat(instances_filtered)
 
-    instances = postprocess_tags(instances)
+    instances = postprocess_tags(instances, tag_thresholds)
 
     instances = ensure_mask_within_bbox(instances)
 
     return instances
 
 
-def postprocess_tags(instances: Instances, ignore_label: int = -100) -> Instances:
-    tag_name_to_conditions = {
-        "is_buildup": ["filling"],
-        "post_material": ["post"],
-        "involvement": ["caries", "secondary_caries", "filling"],
-        "pbl_severity": ["periodontal_bone_loss"],
-        "pbl_type": ["periodontal_bone_loss"],
-        "crown_destruction": ["caries", "secondary_caries", "filling"],
-        **{
-            f"is_surface_{surface}": ["caries", "secondary_caries", "filling"]
-            for surface in SURFACES
-        },
-    }
+def postprocess_tags(
+    instances: Instances,
+    tag_thresholds: dict[str, float] | None = None,
+    ignore_label: int = -100,
+) -> Instances:
+    if tag_thresholds is None:
+        tag_thresholds = {}
 
-    for tag_name, conditions in tag_name_to_conditions.items():
+    for tag_name, conditions in TAG_TO_CONDITIONS.items():
         if not instances.has(f"{tag_name}_classes"):
             continue
+
+        if (threshold := tag_thresholds.get(tag_name)) is not None:
+            positive_class = BINARY_TAG_TO_POSITIVE_CLASS[tag_name]
+            positive_label = TAG_TO_CLASS_TO_LABEL[tag_name][positive_class]
+            negative_label = int(not positive_label)
+
+            full_scores = instances.get(f"{tag_name}_full_scores")
+            positive_scores = full_scores[:, positive_label]
+            positive_scores = rescale_probabilities(positive_scores, threshold)
+            is_positive_prediction = positive_scores >= 0.5
+
+            scores = torch.where(
+                is_positive_prediction,
+                positive_scores,
+                1 - positive_scores,
+            )
+            full_scores[:, positive_label] = positive_scores
+            full_scores[:, negative_label] = 1 - positive_scores
+
+            pred_classes = torch.where(
+                is_positive_prediction, positive_label, negative_label
+            )
+            instances.set(f"{tag_name}_classes", pred_classes)
+            instances.set(f"{tag_name}_scores", scores)
+            instances.set(f"{tag_name}_full_scores", full_scores)
 
         conditions_mask = np.isin(
             instances.pred_classes.cpu().numpy(),
             np.array([CONDITION_CLASS_TO_LABEL_PREDICTIONS[c] for c in conditions]),
         )
-        getattr(instances, f"{tag_name}_classes")[~conditions_mask] = ignore_label
+        instances.get(f"{tag_name}_classes")[~conditions_mask] = ignore_label
 
     return instances
 

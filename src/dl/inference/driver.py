@@ -14,6 +14,7 @@ class IMaskdinoModule(nn.Module):
     min_size_test: int
     max_size_test: int
     thresholds: dict[str, float]
+    tag_thresholds: dict[str, float]
     nms_thresh: float | None = None
 
     def forward(
@@ -26,13 +27,15 @@ class InferenceDriver:
         self,
         model: IMaskdinoModule,
         device: torch.device,
-        probability_thresholds: dict[str, float],
+        condition_thresholds: dict[str, float],
+        tag_thresholds: dict[str, float] | None = None,
         nms_threshold: float | None = None,
         is_jit_scripted: bool = False,
         verbose: bool = True,
     ):
         self.model = model
-        self.probability_thresholds = probability_thresholds
+        self.condition_thresholds = condition_thresholds
+        self.tag_thresholds = tag_thresholds
         self.is_jit_scripted = is_jit_scripted
         self.device = device
         self.nms_threshold = nms_threshold
@@ -54,6 +57,7 @@ class InferenceDriver:
         filter_by_threshold: bool = True,
         crop: tuple[int, int, int, int] | None = None,
         resize_outputs_to_original_shape: bool = True,
+        min_score_threshold: float = 0.0,
     ) -> Instances:
         assert (
             original_image.ndim == 3 and original_image.shape[2] == 3
@@ -92,10 +96,12 @@ class InferenceDriver:
         instances = convert_fields_to_instances(
             instances_fields, model_output_height, model_output_width
         )
+        instances = instances[instances.scores > min_score_threshold]
 
         instances = postprocess_instances(
             instances=instances,
-            probability_thresholds=self.probability_thresholds,
+            condition_thresholds=self.condition_thresholds,
+            tag_thresholds=self.tag_thresholds,
             rescale_scores_inplace=rescale_scores_inplace,
             filter_by_threshold=filter_by_threshold,
         )

@@ -19,6 +19,13 @@ from src.dl.evaluation.utils import (
     convert_instances_to_image_annotation,
 )
 from src.dl.inference.utils import create_inference_driver
+from src.etl.annotation import (
+    BINARY_TAG_TO_POSITIVE_CLASS,
+    CONDITION_CLASS_TO_LABEL_PREDICTIONS,
+    CONDITION_LABEL_TO_CLASS_PREDICTIONS,
+    TAG_TO_CLASS_TO_LABEL,
+    TAG_TO_CONDITIONS,
+)
 from src.maskdino.src.config.load import load_config
 
 
@@ -32,10 +39,12 @@ def main(
     verbose: bool = True,
 ) -> None:
     exp_path = ROOT / "outputs" / exp_name
+    eval_dir = exp_path / f"eval-{dataset}"
+    eval_dir.mkdir(exist_ok=True)
 
     inference_driver = create_inference_driver(
         exp_path=exp_path,
-        score_thresh=0.05,
+        score_thresh=0.15,
         nms_thresh=nms_thresh,
         device=torch.device("cuda"),
         is_jit_scripted=is_jit_scripted,
@@ -46,6 +55,9 @@ def main(
     tag_names = list(tag_name_to_num_classes)
 
     register_available_datasets(tag_names=tag_names)
+    # dataset_dicts = DatasetCatalog.get(f"coco-{dataset}") + DatasetCatalog.get(
+    #     f"coco-test"
+    # )
     dataset_dicts = DatasetCatalog.get(f"coco-{dataset}")
     metadata = MetadataCatalog.get(f"coco-{dataset}")
 
@@ -71,65 +83,141 @@ def main(
         )
         pred_image_annos[image_id] = image_anno
 
-    category_id_to_name_mapping = {
-        i: category_name for i, category_name in enumerate(metadata.thing_classes)
-    }
-
     results = cast(
         list[tuple[float, float]],
         Parallel(n_jobs=-1)(
             delayed(optimize_threshold_for_condition)(
                 pred_image_annos=pred_image_annos,
                 gt_image_annos=gt_image_annos,
-                category_id=category_id,
-                category_id_to_name_mapping=category_id_to_name_mapping,
+                condition=condition,
                 iou_thresh=iou_thresh,
                 mask_iou=mask_iou,
             )
-            for category_id in tqdm(
-                category_id_to_name_mapping, desc="Optimizing thresholds"
+            for condition in tqdm(
+                CONDITION_CLASS_TO_LABEL_PREDICTIONS,
+                desc="Optimizing condition thresholds",
             )
         ),
     )
-    out = {}
-    for category_id, category_name in category_id_to_name_mapping.items():
-        threshold, f1_score = results[category_id]
-        out[category_name] = threshold
+
+    condition_thresholds = {}
+    for i, condition in enumerate(CONDITION_CLASS_TO_LABEL_PREDICTIONS):
+        threshold, f1_score = results[i]
+        condition_thresholds[condition] = threshold
         if verbose:
             loguru.logger.info(
-                f"{category_name}: thresh: {threshold:.2f} F1: {f1_score:.3f}"
+                f"{condition}: thresh: {threshold:.2f} F1: {f1_score:.3f}"
             )
 
-    # dump to json
-    with open(exp_path / "thresholds.json", "w") as f:
-        json.dump(out, f, indent=4)
+    results = cast(
+        list[tuple[float, float]],
+        Parallel(n_jobs=-1)(
+            delayed(optimize_threshold_for_tag)(
+                pred_image_annos=pred_image_annos,
+                gt_image_annos=gt_image_annos,
+                condition_thresholds=condition_thresholds,
+                tags_meta=metadata.tags,
+                tag_name=tag_name,
+                positive_class=positive_class,
+                iou_thresh=iou_thresh,
+                mask_iou=mask_iou,
+            )
+            for tag_name, positive_class in tqdm(
+                BINARY_TAG_TO_POSITIVE_CLASS.items(), desc="Optimizing tag thresholds"
+            )
+        ),
+    )
+
+    tag_thresholds = {}
+    for i, tag_name in enumerate(BINARY_TAG_TO_POSITIVE_CLASS):
+        threshold, f1_score = results[i]
+        tag_thresholds[tag_name] = threshold
+        if verbose:
+            loguru.logger.info(
+                f"{tag_name}: thresh: {threshold:.2f} F1: {f1_score:.3f}"
+            )
+
+    with open(exp_path / "condition_thresholds.json", "w") as f:
+        json.dump(condition_thresholds, f, indent=4)
+
+    with open(exp_path / "tag_thresholds.json", "w") as f:
+        json.dump(tag_thresholds, f, indent=4)
 
 
 def optimize_threshold_for_condition(
     pred_image_annos: dict[int, ImageAnnotation],
     gt_image_annos: dict[int, ImageAnnotation],
-    category_id: int,
-    category_id_to_name_mapping: dict[int, str],
+    condition: str,
     iou_thresh: float,
     mask_iou: bool,
 ) -> tuple[float, float]:
-    pred_image_annos = filter_annotations(pred_image_annos, category_id=category_id)
-    gt_image_annos = filter_annotations(gt_image_annos, category_id=category_id)
+    condition_label = CONDITION_CLASS_TO_LABEL_PREDICTIONS[condition]
+    gt_image_annos = filter_annotations(
+        gt_image_annos, thresholds=None, condition_labels=[condition_label]
+    )
 
     best_threshold = 1.0
     best_f1_score = 0.0
-    for threshold in np.linspace(0.05, 0.95, 10):
-        preds = filter_annotations(pred_image_annos, threshold=threshold)
+    for threshold in np.linspace(0.15, 0.85, 15):
+        preds = filter_annotations(
+            pred_image_annos, thresholds=[threshold], condition_labels=[condition_label]
+        )
         metrics = calculate_metrics(
             preds,
             gt_image_annos,
-            category_id_to_name_mapping=category_id_to_name_mapping,
+            category_id_to_name_mapping=CONDITION_LABEL_TO_CLASS_PREDICTIONS,
             tags_meta=None,
             verbose=False,
             iou_thresh=iou_thresh,
             mask_iou=mask_iou,
         )
-        f1_score = metrics["per_class"][category_id_to_name_mapping[category_id]]["F1"]
+        f1_score = metrics["per_class"][condition]["F1"]
+        if f1_score > best_f1_score:
+            best_threshold = threshold
+            best_f1_score = f1_score
+
+    return best_threshold, best_f1_score
+
+
+def optimize_threshold_for_tag(
+    pred_image_annos: dict[int, ImageAnnotation],
+    gt_image_annos: dict[int, ImageAnnotation],
+    condition_thresholds: dict[str, float],
+    tags_meta: dict[str, dict[int, str]],
+    tag_name: str,
+    positive_class: str,
+    iou_thresh: float,
+    mask_iou: bool,
+) -> tuple[float, float]:
+    conditions = TAG_TO_CONDITIONS[tag_name]
+    condition_labels = [
+        CONDITION_CLASS_TO_LABEL_PREDICTIONS[condition] for condition in conditions
+    ]
+    thresholds = [condition_thresholds[condition] for condition in conditions]
+    pred_image_annos = filter_annotations(
+        pred_image_annos, thresholds=thresholds, condition_labels=condition_labels
+    )
+    gt_image_annos = filter_annotations(
+        gt_image_annos, thresholds=None, condition_labels=condition_labels
+    )
+
+    best_threshold = 1.0
+    best_f1_score = 0.0
+    for threshold in np.linspace(0.15, 0.85, 15):
+        preds = {
+            image_id: resolve_tag_classes_by_threshold(anno, tag_name, threshold)
+            for image_id, anno in pred_image_annos.items()
+        }
+        metrics = calculate_metrics(
+            preds,
+            gt_image_annos,
+            category_id_to_name_mapping=CONDITION_LABEL_TO_CLASS_PREDICTIONS,
+            tags_meta=tags_meta,
+            verbose=False,
+            iou_thresh=iou_thresh,
+            mask_iou=mask_iou,
+        )
+        f1_score = metrics["per_tag"][tag_name][f"{positive_class}/f1_score"]
         if f1_score > best_f1_score:
             best_threshold = threshold
             best_f1_score = f1_score
@@ -139,23 +227,30 @@ def optimize_threshold_for_condition(
 
 def filter_annotations(
     image_annos: dict[int, ImageAnnotation],
-    threshold: float | None = None,
-    category_id: int | None = None,
+    thresholds: list[float] | None,
+    condition_labels: list[int],
 ) -> dict[int, ImageAnnotation]:
     out = {}
-    for image_id, image_anno in image_annos.items():
-        instance_annotations = image_anno["instance_annotations"]
+    if thresholds is None:
+        thresholds = [0.0] * len(condition_labels)
 
-        if threshold is not None:
-            instance_annotations = [
-                anno for anno in instance_annotations if anno["score"] > threshold
-            ]
-        if category_id is not None:
-            instance_annotations = [
-                anno
-                for anno in instance_annotations
-                if anno["category_id"] == category_id
-            ]
+    if len(thresholds) != len(condition_labels):
+        raise ValueError(
+            "Length of thresholds should be equal to length of condition_labels"
+        )
+
+    for image_id, image_anno in image_annos.items():
+        instance_annotations = []
+
+        for condition_label, threshold in zip(condition_labels, thresholds):
+            instance_annotations.extend(
+                [
+                    anno
+                    for anno in image_anno["instance_annotations"]
+                    if anno["score"] >= threshold
+                    and anno["category_id"] == condition_label
+                ]
+            )
 
         out[image_id] = ImageAnnotation(
             width=image_anno["width"],
@@ -164,6 +259,25 @@ def filter_annotations(
             instance_annotations=instance_annotations,
         )
     return out
+
+
+def resolve_tag_classes_by_threshold(
+    pred_image_anno: ImageAnnotation, tag_name: str, threshold: float
+):
+    positive_class = BINARY_TAG_TO_POSITIVE_CLASS[tag_name]
+    positive_label = TAG_TO_CLASS_TO_LABEL[tag_name][positive_class]
+    assert positive_label in (0, 1)
+    for instance_anno in pred_image_anno["instance_annotations"]:
+        if tag_name not in instance_anno["tags"]:
+            continue
+        if "tags_full_scores" not in instance_anno:
+            raise ValueError("tags_full_scores should not be present")
+
+        if instance_anno["tags_full_scores"][tag_name][positive_label] > threshold:
+            instance_anno["tags"][tag_name] = positive_label
+        else:
+            instance_anno["tags"][tag_name] = int(not positive_label)
+    return pred_image_anno
 
 
 if __name__ == "__main__":

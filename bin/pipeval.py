@@ -1,4 +1,5 @@
 import argparse
+from typing import Literal
 
 import cv2
 import loguru
@@ -21,16 +22,40 @@ from src.dl.evaluation.metrics import calculate_metrics
 from src.dl.evaluation.utils import (
     convert_dataset_dict_to_image_annotation,
     convert_pipelines_preds_to_image_annotation,
+    plot_confusion_matrix,
 )
 
 
 def main(
+    dataset: Literal["test-orig", "test-pipelines-orig"] = "test-pipelines-orig",
     iou_thresh: float = 0.2,
     mask_iou: bool = False,
 ) -> None:
-    register_available_datasets(tag_names=None)
-    dataset_dicts = DatasetCatalog.get("coco-test-pipelines-orig")
-    metadata = MetadataCatalog.get("coco-test-pipelines-orig")
+    eval_dir = (
+        ROOT / "outputs" / f"pipelines_{ENVIRONMENT}" / f"{iou_thresh=}_{mask_iou=}"
+    )
+    eval_dir.mkdir(exist_ok=True, parents=True)
+
+    register_available_datasets(
+        tag_names=[
+            "is_buildup",
+            "post_material",
+            "pbl_severity",
+            "pbl_type",
+            "crown_destruction",
+            "involvement",
+            "is_surface_distal",
+            "is_surface_occlusial",
+            "is_surface_lingual",
+            "is_surface_mesial",
+            "is_surface_vestibular",
+            "is_surface_incisal",
+            "is_surface_buccal",
+            "is_surface_not_defined",
+        ]
+    )
+    dataset_dicts = DatasetCatalog.get(f"coco-{dataset}")
+    metadata = MetadataCatalog.get(f"coco-{dataset}")
     code_to_resarch_condition = resolve_code_to_research_condition()
 
     mapper = CustomDatasetMapper(
@@ -49,7 +74,7 @@ def main(
         dataset_dicts_transformed.append(dataset_dict_transformed)
 
         image_annotation = convert_dataset_dict_to_image_annotation(
-            dataset_dict_transformed
+            dataset_dict_transformed, metadata.tags
         )
         gt_image_annos[image_annotation["image_id"]] = image_annotation
 
@@ -66,13 +91,15 @@ def main(
             image = PIL.Image.fromarray(cv2.imread(dataset_dict["file_name"]))
 
         executor["input"] = image
-        teeth_w_pathos = executor["assign_pathologies_to_teeth"]
+        pathologies = executor["pathologies_localization"]
+        pathologies = [p for p in pathologies if p["model_positive"]]
+        # teeth_w_pathos = executor["assign_pathologies_to_teeth"]
 
-        pathologies = []
-        for tooth in teeth_w_pathos:
-            for patho in tooth["pathologies"]:
-                if patho["model_positive"]:
-                    pathologies.append(patho)
+        # pathologies = []
+        # for tooth in teeth_w_pathos:
+        #     for patho in tooth["pathologies"]:
+        #         if patho["model_positive"]:
+        #             pathologies.append(patho)
 
         image_id = dataset_dict["image_id"]
         image_anno = convert_pipelines_preds_to_image_annotation(
@@ -90,7 +117,7 @@ def main(
         category_id_to_name_mapping={
             i: class_name for i, class_name in enumerate(metadata.thing_classes)
         },
-        tags_meta=None,
+        tags_meta=metadata.tags,
         verbose=False,
         iou_thresh=iou_thresh,
         mask_iou=mask_iou,
@@ -100,21 +127,28 @@ def main(
     for name, metrics_ in metrics_dict.items():
         out.update(
             {
-                f"{metric_name}/{name}": metric_value
+                f"{name}/{metric_name}": metric_value
                 for metric_name, metric_value in metrics_.items()
             }
         )
 
     df = pd.Series(out)
     for metric in ["IoU", "F1", "Recall", "Precision"]:
-        df[f"{metric}/mean"] = df[[i for i in df.index if i.startswith(metric)]].mean()
+        df[f"{metric}/mean"] = df[[i for i in df.index if i.endswith(metric)]].mean()
     df = df.round(3)
-    df.to_csv(
-        ROOT / "outputs" / f"pipelines_{ENVIRONMENT}_{iou_thresh=}_{mask_iou=}.csv"
-    )
+    df.to_csv(eval_dir / "metrics.csv")
 
     for metric, metric_value in df.items():
         loguru.logger.info(f"{metric}: {metric_value:.3f}")
+
+    for tag_name, conf_matrix in metrics["conf_matrix_per_tag"].items():
+        class_names = list(metadata.tags[tag_name].values()) + ["not matched"]
+        plot_confusion_matrix(
+            conf_matrix=conf_matrix,
+            class_names=class_names,
+            save_path=eval_dir / f"{tag_name}.png",
+            annotate=True,
+        )
 
 
 def resolve_code_to_research_condition() -> dict[int, str]:
@@ -135,7 +169,10 @@ def resolve_code_to_research_condition() -> dict[int, str]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--iou-thresh", type=float, default=0.2)
+    parser.add_argument("--dataset", type=str, default="test-pipelines-orig")
+
     args = parser.parse_args()
     main(
         iou_thresh=args.iou_thresh,
+        dataset=args.dataset,
     )

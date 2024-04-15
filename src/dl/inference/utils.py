@@ -24,9 +24,8 @@ def create_inference_driver(
     if is_jit_scripted:
         checkpoint_path = exp_path / "model.ts"
         model = torch.jit.load(checkpoint_path, map_location=device)
-        loguru.logger.info("Loading optimized thresholds from scripted model")
-        thresholds = model.thresholds
-        loguru.logger.info("Loading nms threshold from scripted model")
+        condition_thresholds = model.thresholds
+        tag_thresholds = model.tag_thresholds
         nms_thresh = model.nms_thresh
     else:
         assert (exp_path / "last_checkpoint").exists()
@@ -42,19 +41,30 @@ def create_inference_driver(
         checkpointer = DetectionCheckpointer(model)
         checkpointer.load(str(checkpoint_path))
 
-        thresholds_path = exp_path / "thresholds.json"
-        if score_thresh is None and not thresholds_path.exists():
-            raise ValueError(
-                f"score_thresh must be specified if {thresholds_path} does not exist"
+        if score_thresh is None:
+            condition_thresholds_path = exp_path / "condition_thresholds.json"
+            if not condition_thresholds_path.exists():
+                raise ValueError(
+                    f"score_thresh must be specified if {condition_thresholds_path} does not exist"
+                )
+            loguru.logger.info(
+                f"Loading condition thresholds from {condition_thresholds_path}"
             )
-
-        if score_thresh is not None:
-            loguru.logger.info(f"Using default threshold: {score_thresh}")
-            thresholds = {condition: score_thresh for condition in CONDITION_CLASSES}
+            with open(condition_thresholds_path, "r") as f:
+                condition_thresholds = json.load(f)
         else:
-            loguru.logger.info(f"Loading optimized thresholds from {thresholds_path}")
-            with open(thresholds_path, "r") as f:
-                thresholds = json.load(f)
+            loguru.logger.info(f"Using default condition threshold: {score_thresh}")
+            condition_thresholds = {
+                condition: score_thresh for condition in CONDITION_CLASSES
+            }
+
+        tag_thresholds_path = exp_path / "tag_thresholds.json"
+        if tag_thresholds_path.exists():
+            loguru.logger.info(f"Loading tag thresholds from {tag_thresholds_path}")
+            with open(tag_thresholds_path, "r") as f:
+                tag_thresholds = json.load(f)
+        else:
+            tag_thresholds = None
 
     loguru.logger.info(f"Successfully loaded model from {checkpoint_path}")
     model = model.to(device)
@@ -63,7 +73,8 @@ def create_inference_driver(
     inference_driver = InferenceDriver(
         model=model,
         device=device,
-        probability_thresholds=thresholds,
+        condition_thresholds=condition_thresholds,
+        tag_thresholds=tag_thresholds,
         nms_threshold=nms_thresh,
         is_jit_scripted=is_jit_scripted,
     )

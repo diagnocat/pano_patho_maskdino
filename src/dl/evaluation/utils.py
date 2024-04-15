@@ -8,7 +8,11 @@ import numpy as np
 import seaborn as sns
 from detectron2.structures import BoxMode, Instances, polygons_to_bitmask
 
-from ...etl.annotation import CONDITION_CLASS_TO_LABEL_PREDICTIONS
+from ...etl.annotation import (
+    CONDITION_CLASS_TO_LABEL_PREDICTIONS,
+    SURFACES,
+    TAG_TO_CLASS_TO_LABEL,
+)
 from .annotation import ImageAnnotation, InstanceAnnotation
 
 
@@ -57,9 +61,13 @@ def convert_instances_to_image_annotation(
     assert pred_boxes.shape[-1] == 4
     pred_scores = instances.scores
     pred_masks = instances.pred_masks
-    pred_tags = {}
+    pred_tags_classes = {}
+    pred_tags_full_scores = {}
     for tag_name in tags_meta:
-        pred_tags[tag_name] = instances.get(f"{tag_name}_classes").numpy()
+        pred_tags_classes[tag_name] = instances.get(f"{tag_name}_classes").numpy()
+        pred_tags_full_scores[tag_name] = instances.get(
+            f"{tag_name}_full_scores"
+        ).numpy()
 
     instance_annotations = []
     for i in range(len(instances)):
@@ -70,7 +78,10 @@ def convert_instances_to_image_annotation(
             mask_rle=mask_rle,
             bbox=bbox,
             score=pred_scores[i].item(),
-            tags={tag_name: pred_tags[tag_name][i] for tag_name in tags_meta},
+            tags={tag_name: pred_tags_classes[tag_name][i] for tag_name in tags_meta},
+            tags_full_scores={
+                tag_name: pred_tags_full_scores[tag_name][i] for tag_name in tags_meta
+            },
         )
         instance_annotations.append(instance_annotation)
 
@@ -91,6 +102,11 @@ def convert_pipelines_preds_to_image_annotation(
     width: int,
     code_to_resarch_condition: dict[int, str],
 ) -> ImageAnnotation:
+    from pipelines.patho_2d.tag_mappings import (
+        ATTRIBUTE_NAME_TO_TAG_AND_CLASS,
+        CONDITION_TO_TAG_TO_ATTRIBUTE_NAME,
+    )
+
     instance_annotations = []
     for patho in pathologies:
         if not patho["model_positive"]:
@@ -103,6 +119,32 @@ def convert_pipelines_preds_to_image_annotation(
 
         if (category_id := CONDITION_CLASS_TO_LABEL_PREDICTIONS.get(condition)) is None:
             continue
+
+        if condition in CONDITION_TO_TAG_TO_ATTRIBUTE_NAME:
+            tags = {
+                "crown_destruction": TAG_TO_CLASS_TO_LABEL["crown_destruction"]["<50%"],
+                "is_buildup": TAG_TO_CLASS_TO_LABEL["is_buildup"]["Not buildup"],
+                **{
+                    f"is_surface_{surface}": TAG_TO_CLASS_TO_LABEL[
+                        f"is_surface_{surface}"
+                    ][f"Not {surface}"]
+                    for surface in SURFACES
+                },
+            }
+            tags = {
+                tag_name: tag_value
+                for tag_name, tag_value in tags.items()
+                if tag_name in CONDITION_TO_TAG_TO_ATTRIBUTE_NAME[condition]
+            }
+
+            for patho_tag in patho["class_property"]:
+                if patho_tag["model_positive"]:
+                    tag_name, tag_class = ATTRIBUTE_NAME_TO_TAG_AND_CLASS[
+                        patho_tag["property_name"]
+                    ]
+                    tags[tag_name] = TAG_TO_CLASS_TO_LABEL[tag_name][tag_class]
+        else:
+            tags = {}
 
         mask_rle = mask2rle(patho["mask"].astype(np.uint8))
         bbox = (
@@ -117,7 +159,7 @@ def convert_pipelines_preds_to_image_annotation(
             mask_rle=mask_rle,
             bbox=bbox,
             score=1.0,
-            tags={},
+            tags=tags,
         )
         instance_annotations.append(instance_annotation)
 
@@ -182,8 +224,8 @@ def plot_confusion_matrix(
         yticklabels=class_names,
     )
 
-    plt.ylabel("True label")
-    plt.xlabel("Predicted label")
+    plt.ylabel("Predicted label")
+    plt.xlabel("True label")
     plt.title("Confusion Matrix")
 
     if save_path is not None:

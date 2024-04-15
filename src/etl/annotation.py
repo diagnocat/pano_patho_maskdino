@@ -189,7 +189,18 @@ PBL_TYPE_CLASSES = (
 PBL_TYPE_CLASS_TO_LABEL = {c: label for label, c in enumerate(PBL_TYPE_CLASSES)}
 PBL_TYPE_LABEL_TO_CLASS = {label: c for c, label in PBL_TYPE_CLASS_TO_LABEL.items()}
 
-
+TAG_TO_CLASS_TO_LABEL = {
+    "is_buildup": IS_BUILDUP_CLASS_TO_LABEL,
+    "post_material": POST_MATERIAL_CLASS_TO_LABEL,
+    "involvement": INVOLVEMENT_CLASS_TO_LABEL,
+    "crown_destruction": CROWN_DESTRUCTION_CLASS_TO_LABEL,
+    "pbl_severity": PBL_SEVERITY_CLASS_TO_LABEL,
+    "pbl_type": PBL_TYPE_CLASS_TO_LABEL,
+    **{
+        f"is_surface_{surface}": class_to_label
+        for surface, class_to_label in SURFACES_CLASS_TO_LABEL.items()
+    },
+}
 TAG_TO_LABEL_TO_CLASS = {
     "is_buildup": IS_BUILDUP_LABEL_TO_CLASS,
     "post_material": POST_MATERIAL_LABEL_TO_CLASS,
@@ -202,6 +213,28 @@ TAG_TO_LABEL_TO_CLASS = {
         for surface, label_to_class in SURFACES_LABEL_TO_CLASS.items()
     },
 }
+
+
+BINARY_TAG_TO_POSITIVE_CLASS = {
+    "is_buildup": "Buildup",
+    "crown_destruction": ">50%",
+    **{f"is_surface_{surface}": surface for surface in SURFACES},
+}
+
+
+TAG_TO_CONDITIONS = {
+    "is_buildup": ["filling"],
+    "post_material": ["post"],
+    "involvement": ["caries", "secondary_caries", "filling"],
+    "crown_destruction": ["caries", "secondary_caries", "filling"],
+    "pbl_severity": ["periodontal_bone_loss"],
+    "pbl_type": ["periodontal_bone_loss"],
+    **{
+        f"is_surface_{surface}": ["caries", "secondary_caries", "filling"]
+        for surface in SURFACES
+    },
+}
+
 
 CONDITIONS_RU2EN = {
     "Культя": "prepared_tooth",

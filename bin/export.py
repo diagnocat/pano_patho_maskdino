@@ -6,7 +6,6 @@ import time
 
 import loguru
 import torch
-import torch._C
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.modeling import build_model
 
@@ -29,11 +28,18 @@ def main(exp_name: str, nms_thresh: float = 0.8, n_test_runs: int = 10) -> None:
 
     model = build_model(cfg)
     model = model.eval()
-    thresholds_path = exp_path / "thresholds.json"
-    assert thresholds_path.exists()
-    with open(thresholds_path, "r") as f:
-        thresholds = json.load(f)
-    model.thresholds = thresholds
+
+    condition_thresholds_path = exp_path / "condition_thresholds.json"
+    assert condition_thresholds_path.exists()
+    with open(condition_thresholds_path, "r") as f:
+        condition_thresholds = json.load(f)
+    model.thresholds = condition_thresholds
+    tag_thresholds_path = exp_path / "tag_thresholds.json"
+    assert tag_thresholds_path.exists()
+    with open(tag_thresholds_path, "r") as f:
+        tag_thresholds = json.load(f)
+    model.tag_thresholds = tag_thresholds
+
     model.nms_thresh = nms_thresh
 
     checkpointer = DetectionCheckpointer(model)

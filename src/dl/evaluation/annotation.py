@@ -10,8 +10,9 @@ class InstanceAnnotation(TypedDict):
     category_id: int
     bbox: tuple[float, float, float, float]  # xyxy abs
     mask_rle: str  # RLE as a string
-    tags: dict[str, int]
     score: float
+    tags: dict[str, int]
+    tags_full_scores: NotRequired[dict[str, np.ndarray]]
     mask: NotRequired[np.ndarray]
 
 

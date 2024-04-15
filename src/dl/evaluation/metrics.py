@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import scipy.optimize
 
+from ...etl.annotation import BINARY_TAG_TO_POSITIVE_CLASS, TAG_TO_LABEL_TO_CLASS
 from .annotation import ImageAnnotation, InstanceAnnotation
 from .utils import rle2mask
 
@@ -156,22 +157,23 @@ def calculate_metrics(
 
     metrics_per_tag = {tag_name: {} for tag_name in tags_meta}
     for tag_name, conf_matrix in conf_matrix_per_tag.items():
-        if conf_matrix.shape == (3, 3):
-            conf_matrix_2x2 = conf_matrix[:2, :2]
-            precision = (conf_matrix_2x2[1, 1] + eps) / (
-                conf_matrix_2x2[1, :].sum() + eps
+        conf_matrix_matched = conf_matrix[:-1, :-1]
+        positive_class = BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name)
+        for tag_label, tag_class in TAG_TO_LABEL_TO_CLASS[tag_name].items():
+            # Don't calculate precision/recall for negative class
+            # in case of binary classification
+            if positive_class is not None and tag_class != positive_class:
+                continue
+            precision = (conf_matrix_matched[tag_label, tag_label] + eps) / (
+                conf_matrix_matched[tag_label, :].sum() + eps
             )
-            recall = (conf_matrix_2x2[1, 1] + eps) / (conf_matrix_2x2[:, 1].sum() + eps)
-            metrics_per_tag[tag_name]["precision"] = precision
-            metrics_per_tag[tag_name]["recall"] = recall
-
-        accuracy_all = np.diag(conf_matrix).sum() / (conf_matrix.sum() + eps)
-        metrics_per_tag[tag_name]["accuracy_all"] = accuracy_all
-
-        accuracy_tp = np.diag(conf_matrix)[:-1].sum() / (
-            conf_matrix[:-1, :-1].sum() + eps
-        )
-        metrics_per_tag[tag_name]["accuracy_tp"] = accuracy_tp
+            recall = (conf_matrix_matched[tag_label, tag_label] + eps) / (
+                conf_matrix_matched[:, tag_label].sum() + eps
+            )
+            f1_score = (2 * precision * recall) / (precision + recall + eps)
+            metrics_per_tag[tag_name][f"{tag_class}/precision"] = precision
+            metrics_per_tag[tag_name][f"{tag_class}/recall"] = recall
+            metrics_per_tag[tag_name][f"{tag_class}/f1_score"] = f1_score
 
     return Metrics(
         per_class=metrics_per_class,
@@ -253,7 +255,7 @@ def calculate_conf_matrix_per_tag(
             (n_tag_classes + 1, n_tag_classes + 1), dtype=np.int64
         )
         for pred_i, gt_i in pred2gt_indices.items():
-            pred_tag = pred_annos[pred_i]["tags"][tag_name]
+            pred_tag = pred_annos[pred_i]["tags"].get(tag_name)
             if gt_i is not None:
                 gt_tag = gt_annos[gt_i]["tags"][tag_name]
             else:
