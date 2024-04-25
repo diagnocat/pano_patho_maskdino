@@ -1,0 +1,6 @@
+outs:
+- md5: f660b48f5ebe83d7a39f038366eab710
+  size: 4500
+  isexec: true
+  hash: md5
+  path: pipelines_test_hashes.txt
