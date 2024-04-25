@@ -16,6 +16,4 @@ notebooks/
 *.ipynb
 data/processed
 data/raw
-data/raw_old
-pretrained_ckpts/
-data/lakefs
+data/crops.json
