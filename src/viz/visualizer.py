@@ -199,7 +199,7 @@ class CustomVisualizer(Visualizer):
                 tag_label = anno[tag_name]
                 if tag_label != ignore_label:
                     tag_class = tag_label_to_class[tag_label]
-                    if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, None):
+                    if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, tag_class):
                         label += f" {tag_class}"
             labels.append(label)
         return labels
@@ -228,6 +228,8 @@ class CustomVisualizer(Visualizer):
         labels = []
         for i in range(len(instances)):
             label = self.metadata.thing_classes[classes[i]]
+            if label == "periodontal_bone_loss":
+                label = "pbl"
             label += f" {scores[i]:.2f}"
             for tag_name, tag_predictions in tags_predictions.items():
                 tag_label = tag_predictions["classes"][i]
@@ -235,7 +237,7 @@ class CustomVisualizer(Visualizer):
                     continue
                 tag_score = tag_predictions["scores"][i]
                 tag_class = metadata_tags[tag_name][tag_label]
-                if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, None):
+                if tag_class == BINARY_TAG_TO_POSITIVE_CLASS.get(tag_name, tag_class):
                     label += f" {tag_class} {tag_score:.2f}"
             labels.append(label)
 

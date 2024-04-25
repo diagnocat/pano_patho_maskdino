@@ -55,9 +55,6 @@ def main(
     tag_names = list(tag_name_to_num_classes)
 
     register_available_datasets(tag_names=tag_names)
-    # dataset_dicts = DatasetCatalog.get(f"coco-{dataset}") + DatasetCatalog.get(
-    #     f"coco-test"
-    # )
     dataset_dicts = DatasetCatalog.get(f"coco-{dataset}")
     metadata = MetadataCatalog.get(f"coco-{dataset}")
 
